@@ -1,0 +1,18 @@
+# Python / backend
+__pycache__/
+*.py[cod]
+*.sqlite3
+.venv/
+bookclub.db
+
+# FastAPI / tooling
+.python-version
+
+# Node / frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+
+# General
+.DS_Store
+*.log
