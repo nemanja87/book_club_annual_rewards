@@ -103,6 +103,8 @@ export default function AdminClubPage() {
     );
   }
 
+  const shareUrl = slug ? `${window.location.origin}/club/${slug}` : '';
+
   return (
     <div className="container">
       <h1>{config.club.name}</h1>
@@ -114,6 +116,11 @@ export default function AdminClubPage() {
         <button className="button secondary" onClick={() => handleVotingState(false)} disabled={!config.club.voting_open}>
           Close voting
         </button>
+        {shareUrl && (
+          <button className="button" onClick={() => window.open(shareUrl, '_blank')}>
+            Go to voting page
+          </button>
+        )}
       </div>
 
       {error && <p className="muted">{error}</p>}
