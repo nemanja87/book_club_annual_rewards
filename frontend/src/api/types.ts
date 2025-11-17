@@ -79,3 +79,14 @@ export interface ResultsResponse {
   club: Club;
   categories: CategoryResult[];
 }
+
+export interface RevealResultsResponse {
+  status: 'ok';
+  club: Club;
+  results: CategoryResult[];
+}
+
+export interface RevealVotingOpenResponse {
+  status: 'voting_open';
+  message: string;
+}

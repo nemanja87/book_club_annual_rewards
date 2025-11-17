@@ -1,4 +1,5 @@
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, status
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
@@ -167,3 +168,20 @@ def public_results(club_slug: str, db: Session = Depends(get_db)):
     if club.voting_open:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Voting still open")
     return crud.get_results(db, club)
+
+
+@app.get("/api/clubs/{club_slug}/results/reveal", response_model=schemas.RevealResultsResponse)
+def reveal_results(club_slug: str, db: Session = Depends(get_db)):
+    club = crud.get_club_by_slug(db, club_slug)
+    if club.voting_open:
+        return JSONResponse(
+            status_code=status.HTTP_403_FORBIDDEN,
+            content={"status": "voting_open", "message": "Voting is still in progress."},
+        )
+    results = crud.get_results(db, club)
+    payload = schemas.RevealResultsResponse(
+        status="ok",
+        club=results.club,
+        results=results.categories,
+    )
+    return payload

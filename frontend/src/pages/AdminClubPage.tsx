@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import api from '../api/client';
 import {
   Book,
@@ -10,6 +10,7 @@ import {
 
 export default function AdminClubPage() {
   const { slug } = useParams();
+  const navigate = useNavigate();
   const [config, setConfig] = useState<ClubConfigResponse | null>(null);
   const [books, setBooks] = useState<Book[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -104,6 +105,7 @@ export default function AdminClubPage() {
   }
 
   const shareUrl = slug ? `${window.location.origin}/club/${slug}` : '';
+  const revealUrl = slug ? `/reveal/${slug}` : '';
 
   return (
     <div className="container">
@@ -119,6 +121,11 @@ export default function AdminClubPage() {
         {shareUrl && (
           <button className="button" onClick={() => window.open(shareUrl, '_blank')}>
             Go to voting page
+          </button>
+        )}
+        {!config.club.voting_open && revealUrl && (
+          <button className="button gold" onClick={() => navigate(revealUrl)}>
+            Go to ceremony page
           </button>
         )}
       </div>

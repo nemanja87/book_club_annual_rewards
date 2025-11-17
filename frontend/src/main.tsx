@@ -5,6 +5,7 @@ import App from './pages/App';
 import VotingPage from './pages/VotingPage';
 import AdminHomePage from './pages/AdminHomePage';
 import AdminClubPage from './pages/AdminClubPage';
+import RevealPage from './pages/RevealPage';
 import './styles/global.css';
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
@@ -13,6 +14,7 @@ ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
       <Routes>
         <Route path="/" element={<App />} />
         <Route path="/club/:slug" element={<VotingPage />} />
+        <Route path="/reveal/:slug" element={<RevealPage />} />
         <Route path="/admin" element={<AdminHomePage />} />
         <Route path="/admin/:slug" element={<AdminClubPage />} />
       </Routes>

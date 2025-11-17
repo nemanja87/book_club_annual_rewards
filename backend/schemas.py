@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Literal
 
 from pydantic import BaseModel, Field
 
@@ -121,3 +121,9 @@ class CategoryResult(BaseModel):
 class ResultsResponse(BaseModel):
     club: ClubRead
     categories: List[CategoryResult]
+
+
+class RevealResultsResponse(BaseModel):
+    status: Literal["ok"]
+    club: ClubRead
+    results: List[CategoryResult]

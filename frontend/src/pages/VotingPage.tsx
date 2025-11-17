@@ -17,6 +17,7 @@ export default function VotingPage() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selected, setSelected] = useState<Record<number, number>>({});
   const [message, setMessage] = useState<string | null>(null);
+  const [voteCompleted, setVoteCompleted] = useState(false);
 
   useEffect(() => {
     if (!slug) {
@@ -33,6 +34,7 @@ export default function VotingPage() {
         setCurrentIndex(0);
         setError(null);
         setMessage(null);
+        setVoteCompleted(false);
       })
       .catch(() => {
         setError('Club not found');
@@ -78,6 +80,7 @@ export default function VotingPage() {
       };
       const response = await api.post<VoteSubmissionResponse>(`/api/clubs/${slug}/vote`, payload);
       setMessage(`Thanks ${response.data.voter.name}! Your votes are saved.`);
+      setVoteCompleted(true);
     } catch (err: any) {
       const detail = err?.response?.data?.detail ?? 'Unable to submit votes';
       setMessage(detail);
@@ -103,6 +106,7 @@ export default function VotingPage() {
 
   const currentCategory = categories[currentIndex];
   const votingClosed = !config.club.voting_open;
+  const formDisabled = votingClosed || voteCompleted;
 
   return (
     <div className="container">
@@ -116,7 +120,7 @@ export default function VotingPage() {
             type="text"
             value={voterName}
             onChange={(event) => setVoterName(event.target.value)}
-            disabled={votingClosed}
+            disabled={formDisabled}
           />
         </label>
       </div>
@@ -133,20 +137,20 @@ export default function VotingPage() {
               groupName={`category-${currentCategory.id}`}
               book={book}
               selected={selected[currentCategory.id] === book.id}
-              disabled={votingClosed}
+              disabled={formDisabled}
               onSelect={(bookId) => handleSelect(currentCategory.id, bookId)}
             />
           ))}
           <div className="actions">
-            <button className="button secondary" onClick={handlePrev} disabled={currentIndex === 0}>
+            <button className="button secondary" onClick={handlePrev} disabled={currentIndex === 0 || formDisabled}>
               Previous
             </button>
             {currentIndex < categories.length - 1 ? (
-              <button className="button" onClick={handleNext} disabled={currentIndex >= categories.length - 1}>
+              <button className="button" onClick={handleNext} disabled={currentIndex >= categories.length - 1 || formDisabled}>
                 Next
               </button>
             ) : (
-              <button className="button" onClick={handleSubmit} disabled={votingClosed}>
+              <button className="button" onClick={handleSubmit} disabled={formDisabled}>
                 Submit all votes
               </button>
             )}
@@ -157,6 +161,15 @@ export default function VotingPage() {
       )}
 
       {message && <p className="muted">{message}</p>}
+      {voteCompleted && (
+        <div className="card thankyou-card">
+          <h2>Thank you for voting!</h2>
+          <p>Your vote has been recorded. Head over to the ceremony page to watch the winners be revealed.</p>
+          <button className="button" onClick={() => navigate(`/reveal/${slug}`)}>
+            Go to ceremony page
+          </button>
+        </div>
+      )}
     </div>
   );
 }
