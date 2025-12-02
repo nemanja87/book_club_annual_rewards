@@ -1,13 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../api/client';
-import {
-  BookResult,
-  CategoryResult,
-  Club,
-  ClubConfigResponse,
-  RevealResultsResponse
-} from '../api/types';
+import { BookResult, CategoryResult, Club, ClubConfigResponse, RevealResultsResponse } from '../api/types';
 
 type Phase = 'loading' | 'open' | 'ready' | 'error';
 type RevealStage = 'nominees' | 'countdown' | 'winner';
@@ -26,10 +20,12 @@ export default function RevealPage() {
   const [showNominees, setShowNominees] = useState(false);
   const [revealedTopCount, setRevealedTopCount] = useState(0);
   const [revealingTop, setRevealingTop] = useState(false);
+  const [displayContenders, setDisplayContenders] = useState<BookResult[]>([]);
   const suspenseContextRef = useRef<AudioContext | null>(null);
   const fanfareContextRef = useRef<AudioContext | null>(null);
   const fireworkContextRef = useRef<AudioContext | null>(null);
-  const contenderCacheRef = useRef<Record<number, BookResult[]>>({});
+
+  const currentCategory = results[currentIndex] ?? null;
 
   const fetchRevealResults = async () => {
     if (!slug) return;
@@ -67,6 +63,16 @@ export default function RevealPage() {
   }, [slug]);
 
   useEffect(() => {
+    if (!results.length) {
+      setCurrentIndex(0);
+      return;
+    }
+    if (currentIndex > results.length - 1) {
+      setCurrentIndex(0);
+    }
+  }, [results]);
+
+  useEffect(() => {
     if (phase !== 'ready') return;
     setRevealStage('nominees');
     setCountdown(5);
@@ -75,6 +81,40 @@ export default function RevealPage() {
     setRevealedTopCount(0);
     setRevealingTop(false);
   }, [currentIndex, phase]);
+
+  const allBooksPool = useMemo(() => {
+    const map = new Map<number, BookResult>();
+    results.forEach((category) => {
+      category.results.forEach((book) => {
+        if (!map.has(book.book_id)) {
+          map.set(book.book_id, book);
+        }
+      });
+    });
+    return Array.from(map.values());
+  }, [results]);
+
+  useEffect(() => {
+    if (!currentCategory) {
+      setDisplayContenders([]);
+      return;
+    }
+    const sorted = [...currentCategory.results].sort((a, b) => b.weighted_score - a.weighted_score);
+    const display: BookResult[] = [];
+    sorted.forEach((item) => {
+      if (display.length < 3 && !display.find((b) => b.book_id === item.book_id)) {
+        display.push(item);
+      }
+    });
+    const fillerPool = allBooksPool.filter(
+      (item) => !display.find((b) => b.book_id === item.book_id)
+    );
+    while (display.length < 3 && fillerPool.length) {
+      const idx = Math.floor(Math.random() * fillerPool.length);
+      display.push(fillerPool.splice(idx, 1)[0]);
+    }
+    setDisplayContenders(display.slice(0, 3));
+  }, [currentCategory, allBooksPool]);
 
   useEffect(() => {
     return () => {
@@ -265,28 +305,6 @@ export default function RevealPage() {
     setCurrentIndex((prev) => Math.min(prev + 1, results.length - 1));
   };
 
-  const currentCategory = results[currentIndex];
-  const prepareContenders = (category: CategoryResult) => {
-    const sorted = [...category.results].sort((a, b) => b.weighted_score - a.weighted_score);
-    const cached = contenderCacheRef.current[category.category_id];
-    if (cached) return { sortedResults: sorted, displayContenders: cached };
-
-    let display = sorted.slice(0, 5);
-    if (display.length < 3 && sorted.length) {
-      const used = new Set(display.map((b) => b.book_id));
-      while (display.length < 3) {
-        const pick = sorted[Math.floor(Math.random() * sorted.length)];
-        if (!pick) break;
-        if (!used.has(pick.book_id) || used.size === sorted.length) {
-          display.push(pick);
-          used.add(pick.book_id);
-        }
-      }
-    }
-    contenderCacheRef.current[category.category_id] = display;
-    return { sortedResults: sorted, displayContenders: display };
-  };
-
   const renderContent = () => {
     if (phase === 'loading') {
       return <p className="reveal-message">Preparing the stage...</p>;
@@ -324,7 +342,9 @@ export default function RevealPage() {
     }
 
     const winner = currentCategory.results.find((entry) => entry.is_winner);
-    const { sortedResults, displayContenders } = prepareContenders(currentCategory);
+    const sortedResults = [...currentCategory.results].sort(
+      (a, b) => b.weighted_score - a.weighted_score
+    );
     const hideDetails = revealStage !== 'winner';
     const gridClass = `nominee-grid ${displayContenders.length === 3 ? 'three-items' : ''}`;
 

@@ -18,6 +18,7 @@ export default function AdminClubPage() {
   const [newCategory, setNewCategory] = useState({ name: '', description: '', sort_order: 0 });
   const [results, setResults] = useState<ResultsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
 
   const load = () => {
     if (!slug) return;
@@ -96,6 +97,94 @@ export default function AdminClubPage() {
       .catch((err) => setError(err.response?.data?.detail ?? 'Unable to add category'));
   };
 
+  const parseCsv = (text: string) => {
+    const rows = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    if (!rows.length) return [];
+    const headers = rows[0].split(',').map((h) => h.trim().toLowerCase());
+    return rows.slice(1).map((line) => {
+      const cols = line.split(',').map((c) => c.trim());
+      const row: Record<string, string> = {};
+      headers.forEach((h, idx) => {
+        row[h] = cols[idx] ?? '';
+      });
+      return row;
+    });
+  };
+
+  const importBooks = async (items: Array<Partial<Book>>) => {
+    if (!slug || !items.length) return;
+    setIsImporting(true);
+    try {
+      const payloads = items.map((item, idx) => ({
+        title: item.title ?? `Book ${idx + 1}`,
+        author: item.author ?? '',
+        readers_count: Number(item.readers_count) || 0
+      }));
+      const responses = await Promise.all(
+        payloads.map((data) => api.post<Book>(`/api/admin/clubs/${slug}/books`, data).then((res) => res.data))
+      );
+      setBooks((prev) => [...prev, ...responses]);
+    } catch (err: any) {
+      setError(err.response?.data?.detail ?? 'Unable to import books');
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const importCategories = async (items: Array<Partial<Category>>) => {
+    if (!slug || !items.length) return;
+    setIsImporting(true);
+    try {
+      const payloads = items.map((item, idx) => ({
+        name: item.name ?? `Category ${idx + 1}`,
+        description: item.description ?? '',
+        sort_order: Number(item.sort_order ?? idx)
+      }));
+      const responses = await Promise.all(
+        payloads.map((data) =>
+          api.post<Category>(`/api/admin/clubs/${slug}/categories`, data).then((res) => res.data)
+        )
+      );
+      setCategories((prev) => [...prev, ...responses]);
+    } catch (err: any) {
+      setError(err.response?.data?.detail ?? 'Unable to import categories');
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const handleFileUpload = async (
+    fileList: FileList | null,
+    type: 'books' | 'categories'
+  ) => {
+    if (!fileList || !fileList.length) return;
+    const file = fileList[0];
+    const text = await file.text();
+    let items: Array<Record<string, any>> = [];
+    try {
+      if (file.name.toLowerCase().endsWith('.json')) {
+        const parsed = JSON.parse(text);
+        if (Array.isArray(parsed)) {
+          items = parsed;
+        }
+      } else {
+        items = parseCsv(text);
+      }
+    } catch (err) {
+      setError('Unable to parse file. Use JSON array or CSV.');
+      return;
+    }
+    if (!items.length) {
+      setError('No rows found in file.');
+      return;
+    }
+    if (type === 'books') {
+      await importBooks(items);
+    } else {
+      await importCategories(items);
+    }
+  };
+
   if (!config) {
     return (
       <div className="container">
@@ -167,6 +256,23 @@ export default function AdminClubPage() {
             <button className="button" type="submit">
               Add book
             </button>
+            <label style={{ display: 'block' }}>
+              <span className="muted" style={{ display: 'block', marginBottom: '0.35rem' }}>
+                Upload books (CSV or JSON array)
+              </span>
+              <input
+                type="file"
+                accept=".csv,application/json,.json,text/csv"
+                disabled={isImporting}
+                onChange={(e) => {
+                  handleFileUpload(e.target.files, 'books');
+                  e.target.value = '';
+                }}
+              />
+              <span className="muted" style={{ display: 'block', marginTop: '0.25rem' }}>
+                CSV headers: title, author, readers_count
+              </span>
+            </label>
           </form>
         </div>
 
@@ -212,6 +318,23 @@ export default function AdminClubPage() {
             <button className="button" type="submit">
               Add category
             </button>
+            <label style={{ display: 'block' }}>
+              <span className="muted" style={{ display: 'block', marginBottom: '0.35rem' }}>
+                Upload categories (CSV or JSON array)
+              </span>
+              <input
+                type="file"
+                accept=".csv,application/json,.json,text/csv"
+                disabled={isImporting}
+                onChange={(e) => {
+                  handleFileUpload(e.target.files, 'categories');
+                  e.target.value = '';
+                }}
+              />
+              <span className="muted" style={{ display: 'block', marginTop: '0.25rem' }}>
+                CSV headers: name, description, sort_order
+              </span>
+            </label>
           </form>
         </div>
       </div>
