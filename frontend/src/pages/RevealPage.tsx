@@ -23,9 +23,7 @@ export default function RevealPage() {
   const [revealedTopCount, setRevealedTopCount] = useState(0);
   const [revealingTop, setRevealingTop] = useState(false);
   const [displayContenders, setDisplayContenders] = useState<BookResult[]>([]);
-  const suspenseContextRef = useRef<AudioContext | null>(null);
-  const fanfareContextRef = useRef<AudioContext | null>(null);
-  const fireworkContextRef = useRef<AudioContext | null>(null);
+  const revealIntervalRef = useRef<number | null>(null);
   const nominatedAudioRef = useRef<HTMLAudioElement | null>(null);
   const winnerAudioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -86,6 +84,7 @@ export default function RevealPage() {
     setRevealingTop(false);
     stopAllAudio();
     playNominatedTrack();
+    clearRevealInterval();
   }, [currentIndex, phase]);
 
   const allBooksPool = useMemo(() => {
@@ -123,18 +122,22 @@ export default function RevealPage() {
   }, [currentCategory, allBooksPool]);
 
   useEffect(() => {
+    if (revealStage !== 'nominees') return;
+    if (!displayContenders.length) return;
+    if (revealedTopCount > 0 || revealingTop) return;
+    revealTopThree(displayContenders.length);
+  }, [displayContenders, revealStage, revealedTopCount, revealingTop]);
+
+  useEffect(() => {
     return () => {
-      suspenseContextRef.current?.close();
-      fanfareContextRef.current?.close();
-      fireworkContextRef.current?.close();
       stopAllAudio();
+      clearRevealInterval();
     };
   }, []);
 
   useEffect(() => {
     if (revealStage !== 'countdown') return;
     setCountdown(5);
-    playWinnerTrack();
     const timer = setInterval(() => {
       setCountdown((prev) => {
         if (prev <= 1) {
@@ -153,91 +156,9 @@ export default function RevealPage() {
   useEffect(() => {
     if (revealStage !== 'winner') return;
     setFireworksActive(true);
-    playWinnerTrack();
-    playFanfare();
-    playFireworkBurst();
     const timer = setTimeout(() => setFireworksActive(false), 4500);
     return () => clearTimeout(timer);
   }, [revealStage]);
-
-  const playSuspense = () => {
-    try {
-      const AudioCtor = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioCtor) return;
-      const ctx = new AudioCtor();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(180, ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(380, ctx.currentTime + 1.6);
-      gain.gain.setValueAtTime(0.0001, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.08, ctx.currentTime + 0.25);
-      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 1.7);
-      osc.connect(gain).connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + 1.8);
-      suspenseContextRef.current = ctx;
-    } catch (err) {
-      console.warn('Suspense audio failed', err);
-    }
-  };
-
-  const playFanfare = () => {
-    try {
-      const AudioCtor = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioCtor) return;
-      const ctx = new AudioCtor();
-      const tones = [880, 1175, 1568];
-      tones.forEach((freq, idx) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'triangle';
-        osc.frequency.value = freq;
-        const start = ctx.currentTime + idx * 0.08;
-        const end = start + 0.7;
-        gain.gain.setValueAtTime(0.0001, start);
-        gain.gain.exponentialRampToValueAtTime(0.09, start + 0.05);
-        gain.gain.exponentialRampToValueAtTime(0.0001, end);
-        osc.connect(gain).connect(ctx.destination);
-        osc.start(start);
-        osc.stop(end + 0.05);
-      });
-      fanfareContextRef.current = ctx;
-    } catch (err) {
-      console.warn('Fanfare audio failed', err);
-    }
-  };
-
-  const playFireworkBurst = () => {
-    try {
-      const AudioCtor = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioCtor) return;
-      const ctx = new AudioCtor();
-      const duration = 1;
-      const sampleRate = ctx.sampleRate;
-      const buffer = ctx.createBuffer(1, sampleRate * duration, sampleRate);
-      const data = buffer.getChannelData(0);
-      for (let i = 0; i < data.length; i += 1) {
-        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / data.length, 3);
-      }
-      const noise = ctx.createBufferSource();
-      noise.buffer = buffer;
-      const bandpass = ctx.createBiquadFilter();
-      bandpass.type = 'bandpass';
-      bandpass.frequency.value = 1800;
-      const gain = ctx.createGain();
-      const now = ctx.currentTime;
-      gain.gain.setValueAtTime(0.0001, now);
-      gain.gain.exponentialRampToValueAtTime(0.18, now + 0.05);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
-      noise.connect(bandpass).connect(gain).connect(ctx.destination);
-      noise.start(now);
-      noise.stop(now + duration);
-      fireworkContextRef.current = ctx;
-    } catch (err) {
-      console.warn('Firework audio failed', err);
-    }
-  };
 
   const playTick = () => {
     try {
@@ -343,7 +264,14 @@ export default function RevealPage() {
     if (revealStage !== 'nominees') return;
     if (revealedTopCount < 3 && !revealingTop) return;
     setRevealStage('countdown');
-    playSuspense();
+    playWinnerTrack();
+  };
+
+  const clearRevealInterval = () => {
+    if (revealIntervalRef.current) {
+      clearInterval(revealIntervalRef.current);
+      revealIntervalRef.current = null;
+    }
   };
 
   const revealTopThree = (count: number) => {
@@ -354,25 +282,30 @@ export default function RevealPage() {
     playNominatedTrack();
     setRevealedTopCount(0);
     let current = 0;
-    const interval = setInterval(() => {
+    clearRevealInterval();
+    const interval = window.setInterval(() => {
       current += 1;
       setRevealedTopCount(current);
       playChime();
       if (current >= total) {
         clearInterval(interval);
         setRevealingTop(false);
+        revealIntervalRef.current = null;
       }
     }, 3000);
+    revealIntervalRef.current = interval;
   };
 
   const goToPrevious = () => {
     setCurrentIndex((prev) => Math.max(prev - 1, 0));
     stopAllAudio();
+    clearRevealInterval();
   };
 
   const goToNext = () => {
     setCurrentIndex((prev) => Math.min(prev + 1, results.length - 1));
     stopAllAudio();
+    clearRevealInterval();
   };
 
   const renderContent = () => {
@@ -471,15 +404,6 @@ export default function RevealPage() {
             <div className="reveal-actions">
               <p className="drum-roll">Envelope sealed. Ready to reveal?</p>
               <div className="reveal-actions-row">
-                <button
-                  className="button secondary"
-                  onClick={() => revealTopThree(displayContenders.length)}
-                  disabled={
-                    revealingTop || revealedTopCount >= Math.min(3, displayContenders.length)
-                  }
-                >
-                  Reveal top 3
-                </button>
                 <button
                   className="button gold"
                   onClick={startCountdown}
