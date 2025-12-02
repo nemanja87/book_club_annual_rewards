@@ -11,6 +11,12 @@ export default function App() {
           Go to Admin
         </Link>
       </div>
+      <div className="card">
+        <p>New to the platform? Learn how the awards ceremony works and how votes are scored.</p>
+        <Link className="button secondary" to="/about">
+          Learn more
+        </Link>
+      </div>
     </div>
   );
 }
