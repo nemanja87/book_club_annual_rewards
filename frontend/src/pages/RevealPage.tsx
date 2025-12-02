@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../api/client';
 import { BookResult, CategoryResult, Club, ClubConfigResponse, RevealResultsResponse } from '../api/types';
+import nominatedTrack from '../sounds/nominated.mp3';
+import winnerTrack from '../sounds/winner.mp3';
 
 type Phase = 'loading' | 'open' | 'ready' | 'error';
 type RevealStage = 'nominees' | 'countdown' | 'winner';
@@ -24,6 +26,8 @@ export default function RevealPage() {
   const suspenseContextRef = useRef<AudioContext | null>(null);
   const fanfareContextRef = useRef<AudioContext | null>(null);
   const fireworkContextRef = useRef<AudioContext | null>(null);
+  const nominatedAudioRef = useRef<HTMLAudioElement | null>(null);
+  const winnerAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const currentCategory = results[currentIndex] ?? null;
 
@@ -80,6 +84,8 @@ export default function RevealPage() {
     setShowNominees(false);
     setRevealedTopCount(0);
     setRevealingTop(false);
+    stopAllAudio();
+    playNominatedTrack();
   }, [currentIndex, phase]);
 
   const allBooksPool = useMemo(() => {
@@ -121,12 +127,14 @@ export default function RevealPage() {
       suspenseContextRef.current?.close();
       fanfareContextRef.current?.close();
       fireworkContextRef.current?.close();
+      stopAllAudio();
     };
   }, []);
 
   useEffect(() => {
     if (revealStage !== 'countdown') return;
     setCountdown(5);
+    playWinnerTrack();
     const timer = setInterval(() => {
       setCountdown((prev) => {
         if (prev <= 1) {
@@ -145,6 +153,7 @@ export default function RevealPage() {
   useEffect(() => {
     if (revealStage !== 'winner') return;
     setFireworksActive(true);
+    playWinnerTrack();
     playFanfare();
     playFireworkBurst();
     const timer = setTimeout(() => setFireworksActive(false), 4500);
@@ -272,6 +281,64 @@ export default function RevealPage() {
     }
   };
 
+  const stopAllAudio = () => {
+    const audios = [nominatedAudioRef.current, winnerAudioRef.current];
+    audios.forEach((audio) => {
+      if (audio) {
+        audio.pause();
+        audio.currentTime = 0;
+      }
+    });
+  };
+
+  const playNominatedTrack = () => {
+    stopWinnerTrack();
+    try {
+      if (!nominatedAudioRef.current) {
+        nominatedAudioRef.current = new Audio(nominatedTrack);
+        nominatedAudioRef.current.loop = true;
+        nominatedAudioRef.current.volume = 0.35;
+      }
+      const audio = nominatedAudioRef.current;
+      audio.currentTime = 0;
+      audio.play().catch((err) => console.warn('Unable to play nominated track', err));
+    } catch (err) {
+      console.warn('Nominated audio failed', err);
+    }
+  };
+
+  const stopWinnerTrack = () => {
+    const audio = winnerAudioRef.current;
+    if (audio) {
+      audio.pause();
+      audio.currentTime = 0;
+    }
+  };
+
+  const playWinnerTrack = () => {
+    stopNominatedTrack();
+    try {
+      if (!winnerAudioRef.current) {
+        winnerAudioRef.current = new Audio(winnerTrack);
+        winnerAudioRef.current.loop = true;
+        winnerAudioRef.current.volume = 0.35;
+      }
+      const audio = winnerAudioRef.current;
+      audio.currentTime = 0;
+      audio.play().catch((err) => console.warn('Unable to play winner track', err));
+    } catch (err) {
+      console.warn('Winner audio failed', err);
+    }
+  };
+
+  const stopNominatedTrack = () => {
+    const audio = nominatedAudioRef.current;
+    if (audio) {
+      audio.pause();
+      audio.currentTime = 0;
+    }
+  };
+
   const startCountdown = () => {
     if (revealStage !== 'nominees') return;
     if (revealedTopCount < 3 && !revealingTop) return;
@@ -284,6 +351,7 @@ export default function RevealPage() {
     const total = Math.min(3, count);
     if (!total) return;
     setRevealingTop(true);
+    playNominatedTrack();
     setRevealedTopCount(0);
     let current = 0;
     const interval = setInterval(() => {
@@ -299,10 +367,12 @@ export default function RevealPage() {
 
   const goToPrevious = () => {
     setCurrentIndex((prev) => Math.max(prev - 1, 0));
+    stopAllAudio();
   };
 
   const goToNext = () => {
     setCurrentIndex((prev) => Math.min(prev + 1, results.length - 1));
+    stopAllAudio();
   };
 
   const renderContent = () => {
