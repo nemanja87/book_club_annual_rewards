@@ -17,6 +17,7 @@ export default function VotingPage() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selected, setSelected] = useState<Record<number, number>>({});
   const [message, setMessage] = useState<string | null>(null);
+  const [submittedName, setSubmittedName] = useState<string | null>(null);
   const [voteCompleted, setVoteCompleted] = useState(false);
 
   useEffect(() => {
@@ -34,6 +35,7 @@ export default function VotingPage() {
         setCurrentIndex(0);
         setError(null);
         setMessage(null);
+        setSubmittedName(null);
         setVoteCompleted(false);
       })
       .catch(() => {
@@ -79,7 +81,8 @@ export default function VotingPage() {
         }))
       };
       const response = await api.post<VoteSubmissionResponse>(`/api/clubs/${slug}/vote`, payload);
-      setMessage(`Thanks ${response.data.voter.name}! Your votes are saved.`);
+      setSubmittedName(response.data.voter.name);
+      setMessage(null);
       setVoteCompleted(true);
     } catch (err: any) {
       const detail = err?.response?.data?.detail ?? 'Unable to submit votes';
@@ -107,6 +110,38 @@ export default function VotingPage() {
   const currentCategory = categories[currentIndex];
   const votingClosed = !config.club.voting_open;
   const formDisabled = votingClosed || voteCompleted;
+
+  if (voteCompleted) {
+    return (
+      <div className="container">
+        <h1>{config.club.name}</h1>
+        <p className="muted">Your ballot has been submitted.</p>
+        <div className="card vote-complete-card">
+          <p className="muted">Ballot submitted</p>
+          <h2 className="vote-complete-title">
+            Thanks{submittedName ? `, ${submittedName}` : ''} for voting!
+          </h2>
+          <p className="vote-complete-subtext">
+            Your picks are saved. Head to the ceremony to watch the reveal.
+          </p>
+          <div className="actions vote-complete-actions">
+            <button className="button" onClick={() => navigate(`/reveal/${slug}`)}>
+              Go to ceremony page
+            </button>
+            <button
+              className="button secondary"
+              onClick={() => {
+                setVoteCompleted(false);
+                setMessage(null);
+              }}
+            >
+              Edit votes
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container">
