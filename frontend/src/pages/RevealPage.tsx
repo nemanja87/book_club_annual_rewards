@@ -118,7 +118,18 @@ export default function RevealPage() {
       const idx = Math.floor(Math.random() * fillerPool.length);
       display.push(fillerPool.splice(idx, 1)[0]);
     }
-    setDisplayContenders(display.slice(0, 3));
+    const trimmed = display.slice(0, 3);
+    // Shuffle so winner is not always first
+    for (let i = trimmed.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [trimmed[i], trimmed[j]] = [trimmed[j], trimmed[i]];
+    }
+    const winnerIdx = trimmed.findIndex((entry) => entry.is_winner);
+    if (winnerIdx === 0 && trimmed.length > 1) {
+      const swapWith = Math.floor(Math.random() * (trimmed.length - 1)) + 1;
+      [trimmed[0], trimmed[swapWith]] = [trimmed[swapWith], trimmed[0]];
+    }
+    setDisplayContenders(trimmed);
   }, [currentCategory, allBooksPool]);
 
   useEffect(() => {
