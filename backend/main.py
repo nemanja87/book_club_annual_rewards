@@ -74,6 +74,17 @@ def create_book(club_slug: str, book_in: schemas.BookCreate, db: Session = Depen
     return schemas.BookRead.model_validate(book)
 
 
+@app.put(
+    "/api/admin/clubs/{club_slug}/books/{book_id}",
+    response_model=schemas.BookRead,
+    dependencies=[Depends(verify_admin_secret)],
+)
+def update_book(club_slug: str, book_id: int, book_in: schemas.BookUpdate, db: Session = Depends(get_db)):
+    club = crud.get_club_by_slug(db, club_slug)
+    book = crud.update_book(db, club, book_id, book_in)
+    return schemas.BookRead.model_validate(book)
+
+
 @app.get(
     "/api/admin/clubs/{club_slug}/books",
     response_model=list[schemas.BookRead],
@@ -93,6 +104,19 @@ def list_books(club_slug: str, db: Session = Depends(get_db)):
 def create_category(club_slug: str, category_in: schemas.CategoryCreate, db: Session = Depends(get_db)):
     club = crud.get_club_by_slug(db, club_slug)
     category = crud.create_category(db, club, category_in)
+    return schemas.CategoryRead.model_validate(category)
+
+
+@app.put(
+    "/api/admin/clubs/{club_slug}/categories/{category_id}",
+    response_model=schemas.CategoryRead,
+    dependencies=[Depends(verify_admin_secret)],
+)
+def update_category(
+    club_slug: str, category_id: int, category_in: schemas.CategoryUpdate, db: Session = Depends(get_db)
+):
+    club = crud.get_club_by_slug(db, club_slug)
+    category = crud.update_category(db, club, category_id, category_in)
     return schemas.CategoryRead.model_validate(category)
 
 

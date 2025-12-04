@@ -24,6 +24,7 @@ export default function RevealPage() {
   const [revealingTop, setRevealingTop] = useState(false);
   const [displayContenders, setDisplayContenders] = useState<BookResult[]>([]);
   const revealIntervalRef = useRef<number | null>(null);
+  const [soundEnabled, setSoundEnabled] = useState(true);
   const nominatedAudioRef = useRef<HTMLAudioElement | null>(null);
   const winnerAudioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -83,7 +84,7 @@ export default function RevealPage() {
     setRevealedTopCount(0);
     setRevealingTop(false);
     stopAllAudio();
-    playNominatedTrack();
+    playNominatedTrack(true);
     clearRevealInterval();
   }, [currentIndex, phase]);
 
@@ -165,6 +166,9 @@ export default function RevealPage() {
   }, [revealStage]);
 
   useEffect(() => {
+    if (revealStage === 'nominees') {
+      playNominatedTrack(true);
+    }
     if (revealStage !== 'winner') return;
     setFireworksActive(true);
     const timer = setTimeout(() => setFireworksActive(false), 4500);
@@ -223,7 +227,8 @@ export default function RevealPage() {
     });
   };
 
-  const playNominatedTrack = () => {
+  const playNominatedTrack = (force = false) => {
+    if (!soundEnabled && !force) return;
     stopWinnerTrack();
     try {
       if (!nominatedAudioRef.current) {
@@ -247,7 +252,8 @@ export default function RevealPage() {
     }
   };
 
-  const playWinnerTrack = () => {
+  const playWinnerTrack = (force = false) => {
+    if (!soundEnabled && !force) return;
     stopNominatedTrack();
     try {
       if (!winnerAudioRef.current) {
@@ -317,6 +323,20 @@ export default function RevealPage() {
     setCurrentIndex((prev) => Math.min(prev + 1, results.length - 1));
     stopAllAudio();
     clearRevealInterval();
+  };
+
+  const toggleSound = () => {
+    const next = !soundEnabled;
+    setSoundEnabled(next);
+    if (!next) {
+      stopAllAudio();
+      return;
+    }
+    if (revealStage === 'winner') {
+      playWinnerTrack(true);
+    } else {
+      playNominatedTrack(true);
+    }
   };
 
   const renderContent = () => {
@@ -508,7 +528,13 @@ export default function RevealPage() {
           ))}
         </div>
       )}
-      {club && <p className="reveal-club">Awards Ceremony · {club.name}</p>}
+      <div className="reveal-topbar">
+        {club && <p className="reveal-club">Awards Ceremony · {club.name}</p>}
+        <button className="sound-toggle" onClick={toggleSound} aria-label="Toggle sound">
+          <span className="sound-icon">{soundEnabled ? '🔊' : '🔇'}</span>
+          <span className="sound-label">{soundEnabled ? 'Sound on' : 'Muted'}</span>
+        </button>
+      </div>
       {renderContent()}
     </div>
   );

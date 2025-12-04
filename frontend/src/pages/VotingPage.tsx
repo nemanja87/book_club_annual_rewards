@@ -181,11 +181,19 @@ export default function VotingPage() {
               Previous
             </button>
             {currentIndex < categories.length - 1 ? (
-              <button className="button" onClick={handleNext} disabled={currentIndex >= categories.length - 1 || formDisabled}>
+              <button
+                className="button"
+                onClick={handleNext}
+                disabled={
+                  currentIndex >= categories.length - 1 ||
+                  formDisabled ||
+                  !selected[currentCategory.id]
+                }
+              >
                 Next
               </button>
             ) : (
-              <button className="button" onClick={handleSubmit} disabled={formDisabled}>
+              <button className="button" onClick={handleSubmit} disabled={formDisabled || !selected[currentCategory.id]}>
                 Submit all votes
               </button>
             )}

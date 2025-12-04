@@ -19,6 +19,14 @@ export default function AdminClubPage() {
   const [results, setResults] = useState<ResultsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
+  const [editingBookId, setEditingBookId] = useState<number | null>(null);
+  const [editingBookDraft, setEditingBookDraft] = useState({ title: '', author: '', readers_count: 0 });
+  const [editingCategoryId, setEditingCategoryId] = useState<number | null>(null);
+  const [editingCategoryDraft, setEditingCategoryDraft] = useState({
+    name: '',
+    description: '',
+    sort_order: 0
+  });
 
   const load = () => {
     if (!slug) return;
@@ -120,10 +128,12 @@ export default function AdminClubPage() {
         author: item.author ?? '',
         readers_count: Number(item.readers_count) || 0
       }));
-      const responses = await Promise.all(
-        payloads.map((data) => api.post<Book>(`/api/admin/clubs/${slug}/books`, data).then((res) => res.data))
-      );
-      setBooks((prev) => [...prev, ...responses]);
+      const created: Book[] = [];
+      for (const data of payloads) {
+        const res = await api.post<Book>(`/api/admin/clubs/${slug}/books`, data);
+        created.push(res.data);
+      }
+      setBooks((prev) => [...prev, ...created]);
     } catch (err: any) {
       setError(err.response?.data?.detail ?? 'Unable to import books');
     } finally {
@@ -185,6 +195,55 @@ export default function AdminClubPage() {
     }
   };
 
+  const startEditBook = (book: Book) => {
+    setEditingBookId(book.id);
+    setEditingBookDraft({
+      title: book.title,
+      author: book.author ?? '',
+      readers_count: book.readers_count
+    });
+  };
+
+  const startEditCategory = (category: Category) => {
+    setEditingCategoryId(category.id);
+    setEditingCategoryDraft({
+      name: category.name,
+      description: category.description ?? '',
+      sort_order: category.sort_order
+    });
+  };
+
+  const saveBookEdit = async () => {
+    if (!slug || editingBookId === null) return;
+    try {
+      const { data } = await api.put<Book>(`/api/admin/clubs/${slug}/books/${editingBookId}`, editingBookDraft);
+      setBooks((prev) => prev.map((b) => (b.id === data.id ? data : b)));
+      setEditingBookId(null);
+    } catch (err: any) {
+      setError(err.response?.data?.detail ?? 'Unable to update book');
+    }
+  };
+
+  const saveCategoryEdit = async () => {
+    if (!slug || editingCategoryId === null) return;
+    try {
+      const payload = { ...editingCategoryDraft, sort_order: Number(editingCategoryDraft.sort_order) };
+      const { data } = await api.put<Category>(
+        `/api/admin/clubs/${slug}/categories/${editingCategoryId}`,
+        payload
+      );
+      setCategories((prev) => prev.map((c) => (c.id === data.id ? data : c)));
+      setEditingCategoryId(null);
+    } catch (err: any) {
+      setError(err.response?.data?.detail ?? 'Unable to update category');
+    }
+  };
+
+  const cancelEdits = () => {
+    setEditingBookId(null);
+    setEditingCategoryId(null);
+  };
+
   if (!config) {
     return (
       <div className="container">
@@ -224,15 +283,66 @@ export default function AdminClubPage() {
       <div className="grid">
         <div className="card">
           <h2>Books</h2>
-          {books.map((book) => (
-            <div key={book.id} className="list-item">
-              <div>
-                <strong>{book.title}</strong>
-                {book.author && <span className="muted"> by {book.author}</span>}
-                <div className="muted">Readers: {book.readers_count}</div>
+          {books.map((book) =>
+            editingBookId === book.id ? (
+              <form
+                key={book.id}
+                className="stack"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  saveBookEdit();
+                }}
+                style={{ marginBottom: '0.75rem' }}
+              >
+                <h3>Edit book</h3>
+                <label>
+                  Title
+                  <input
+                    value={editingBookDraft.title}
+                    onChange={(e) => setEditingBookDraft({ ...editingBookDraft, title: e.target.value })}
+                    required
+                  />
+                </label>
+                <label>
+                  Author
+                  <input
+                    value={editingBookDraft.author}
+                    onChange={(e) => setEditingBookDraft({ ...editingBookDraft, author: e.target.value })}
+                  />
+                </label>
+                <label>
+                  Readers count
+                  <input
+                    type="number"
+                    min={0}
+                    value={editingBookDraft.readers_count}
+                    onChange={(e) =>
+                      setEditingBookDraft({ ...editingBookDraft, readers_count: Number(e.target.value) })
+                    }
+                  />
+                </label>
+                <div className="actions">
+                  <button className="button" type="submit">
+                    Save changes
+                  </button>
+                  <button type="button" className="button secondary" onClick={cancelEdits}>
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div key={book.id} className="list-item">
+                <div>
+                  <strong>{book.title}</strong>
+                  {book.author && <span className="muted"> by {book.author}</span>}
+                  <div className="muted">Readers: {book.readers_count}</div>
+                </div>
+                <button className="button secondary" type="button" onClick={() => startEditBook(book)}>
+                  Edit
+                </button>
               </div>
-            </div>
-          ))}
+            )
+          )}
           <form className="stack" onSubmit={handleBookCreate}
             style={{ marginTop: '1rem' }}>
             <label>
@@ -281,15 +391,65 @@ export default function AdminClubPage() {
           {categories
             .slice()
             .sort((a, b) => a.sort_order - b.sort_order)
-            .map((category) => (
-              <div key={category.id} className="list-item">
-                <div>
-                  <strong>{category.name}</strong>
-                  {category.description && <div className="muted">{category.description}</div>}
-                  <div className="muted">Order: {category.sort_order}</div>
+            .map((category) =>
+              editingCategoryId === category.id ? (
+                <form
+                  key={category.id}
+                  className="stack"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    saveCategoryEdit();
+                  }}
+                  style={{ marginBottom: '0.75rem' }}
+                >
+                  <h3>Edit category</h3>
+                  <label>
+                    Name
+                    <input
+                      value={editingCategoryDraft.name}
+                      onChange={(e) => setEditingCategoryDraft({ ...editingCategoryDraft, name: e.target.value })}
+                      required
+                    />
+                  </label>
+                  <label>
+                    Description
+                    <textarea
+                      value={editingCategoryDraft.description}
+                      onChange={(e) => setEditingCategoryDraft({ ...editingCategoryDraft, description: e.target.value })}
+                    />
+                  </label>
+                  <label>
+                    Sort order
+                    <input
+                      type="number"
+                      value={editingCategoryDraft.sort_order}
+                      onChange={(e) =>
+                        setEditingCategoryDraft({ ...editingCategoryDraft, sort_order: Number(e.target.value) })
+                      }
+                    />
+                  </label>
+                  <div className="actions">
+                    <button className="button" type="submit">
+                      Save changes
+                    </button>
+                    <button type="button" className="button secondary" onClick={cancelEdits}>
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <div key={category.id} className="list-item">
+                  <div>
+                    <strong>{category.name}</strong>
+                    {category.description && <div className="muted">{category.description}</div>}
+                    <div className="muted">Order: {category.sort_order}</div>
+                  </div>
+                  <button className="button secondary" type="button" onClick={() => startEditCategory(category)}>
+                    Edit
+                  </button>
                 </div>
-              </div>
-            ))}
+              )
+            )}
           <form className="stack" onSubmit={handleCategoryCreate}
             style={{ marginTop: '1rem' }}>
             <label>

@@ -42,6 +42,12 @@ class BookRead(BookBase):
         from_attributes = True
 
 
+class BookUpdate(BaseModel):
+    title: str | None = None
+    author: Optional[str] = None
+    readers_count: int | None = Field(default=None, ge=0)
+
+
 class CategoryBase(BaseModel):
     name: str
     description: Optional[str] = None
@@ -59,6 +65,13 @@ class CategoryRead(CategoryBase):
 
     class Config:
         from_attributes = True
+
+
+class CategoryUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    sort_order: Optional[int] = None
+    active: Optional[bool] = None
 
 
 class VoterRead(BaseModel):

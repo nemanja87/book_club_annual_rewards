@@ -45,6 +45,23 @@ def create_book(db: Session, club: models.Club, book_in: schemas.BookCreate) -> 
     return book
 
 
+def update_book(db: Session, club: models.Club, book_id: int, book_in: schemas.BookUpdate) -> models.Book:
+    stmt = select(models.Book).where(models.Book.id == book_id, models.Book.club_id == club.id)
+    book = db.scalar(stmt)
+    if not book:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Book not found")
+    if book_in.title is not None:
+        book.title = book_in.title
+    if book_in.author is not None:
+        book.author = book_in.author
+    if book_in.readers_count is not None:
+        book.readers_count = book_in.readers_count
+    db.add(book)
+    db.commit()
+    db.refresh(book)
+    return book
+
+
 def list_books(db: Session, club: models.Club) -> List[models.Book]:
     stmt = select(models.Book).where(models.Book.club_id == club.id).order_by(models.Book.created_at)
     return list(db.scalars(stmt))
@@ -52,6 +69,27 @@ def list_books(db: Session, club: models.Club) -> List[models.Book]:
 
 def create_category(db: Session, club: models.Club, category_in: schemas.CategoryCreate) -> models.Category:
     category = models.Category(club_id=club.id, **category_in.dict())
+    db.add(category)
+    db.commit()
+    db.refresh(category)
+    return category
+
+
+def update_category(
+    db: Session, club: models.Club, category_id: int, category_in: schemas.CategoryUpdate
+) -> models.Category:
+    stmt = select(models.Category).where(models.Category.id == category_id, models.Category.club_id == club.id)
+    category = db.scalar(stmt)
+    if not category:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category not found")
+    if category_in.name is not None:
+        category.name = category_in.name
+    if category_in.description is not None:
+        category.description = category_in.description
+    if category_in.sort_order is not None:
+        category.sort_order = category_in.sort_order
+    if category_in.active is not None:
+        category.active = category_in.active
     db.add(category)
     db.commit()
     db.refresh(category)

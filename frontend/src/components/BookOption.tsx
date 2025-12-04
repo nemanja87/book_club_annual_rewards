@@ -21,7 +21,6 @@ export default function BookOption({ groupName, book, selected, onSelect, disabl
       <div>
         <strong>{book.title}</strong>
         {book.author && <span className="muted"> by {book.author}</span>}
-        <div className="muted">Read by {book.readers_count} members</div>
       </div>
     </label>
   );
