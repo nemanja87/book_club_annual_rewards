@@ -239,6 +239,44 @@ export default function AdminClubPage() {
     }
   };
 
+  const deleteBook = async (book: Book) => {
+    if (!slug) return;
+    const ok = window.confirm(`Delete "${book.title}"?\n\nThis also removes any votes for this book.`);
+    if (!ok) return;
+    try {
+      await api.delete(`/api/admin/clubs/${slug}/books/${book.id}`);
+      setBooks((prev) => prev.filter((b) => b.id !== book.id));
+      if (editingBookId === book.id) {
+        setEditingBookId(null);
+      }
+      if (config && !config.club.voting_open) {
+        loadResults();
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.detail ?? 'Unable to delete book');
+    }
+  };
+
+  const deleteCategory = async (category: Category) => {
+    if (!slug) return;
+    const ok = window.confirm(
+      `Delete "${category.name}"?\n\nThis also removes any votes in this category.`
+    );
+    if (!ok) return;
+    try {
+      await api.delete(`/api/admin/clubs/${slug}/categories/${category.id}`);
+      setCategories((prev) => prev.filter((c) => c.id !== category.id));
+      if (editingCategoryId === category.id) {
+        setEditingCategoryId(null);
+      }
+      if (config && !config.club.voting_open) {
+        loadResults();
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.detail ?? 'Unable to delete category');
+    }
+  };
+
   const cancelEdits = () => {
     setEditingBookId(null);
     setEditingCategoryId(null);
@@ -337,9 +375,14 @@ export default function AdminClubPage() {
                   {book.author && <span className="muted"> by {book.author}</span>}
                   <div className="muted">Readers: {book.readers_count}</div>
                 </div>
-                <button className="button secondary" type="button" onClick={() => startEditBook(book)}>
-                  Edit
-                </button>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button className="button secondary" type="button" onClick={() => startEditBook(book)}>
+                    Edit
+                  </button>
+                  <button className="button danger" type="button" onClick={() => deleteBook(book)}>
+                    Delete
+                  </button>
+                </div>
               </div>
             )
           )}
@@ -444,9 +487,14 @@ export default function AdminClubPage() {
                     {category.description && <div className="muted">{category.description}</div>}
                     <div className="muted">Order: {category.sort_order}</div>
                   </div>
-                  <button className="button secondary" type="button" onClick={() => startEditCategory(category)}>
-                    Edit
-                  </button>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button className="button secondary" type="button" onClick={() => startEditCategory(category)}>
+                      Edit
+                    </button>
+                    <button className="button danger" type="button" onClick={() => deleteCategory(category)}>
+                      Delete
+                    </button>
+                  </div>
                 </div>
               )
             )}

@@ -1,7 +1,7 @@
 from typing import List, Tuple
 
 from fastapi import HTTPException, status
-from sqlalchemy import Select, func, select
+from sqlalchemy import Select, delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -67,6 +67,17 @@ def list_books(db: Session, club: models.Club) -> List[models.Book]:
     return list(db.scalars(stmt))
 
 
+def delete_book(db: Session, club: models.Club, book_id: int) -> None:
+    stmt = select(models.Book).where(models.Book.id == book_id, models.Book.club_id == club.id)
+    book = db.scalar(stmt)
+    if not book:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Book not found")
+
+    db.execute(delete(models.Vote).where(models.Vote.club_id == club.id, models.Vote.book_id == book.id))
+    db.delete(book)
+    db.commit()
+
+
 def create_category(db: Session, club: models.Club, category_in: schemas.CategoryCreate) -> models.Category:
     category = models.Category(club_id=club.id, **category_in.dict())
     db.add(category)
@@ -105,6 +116,17 @@ def list_categories(db: Session, club: models.Club, *, include_inactive: bool = 
     if not include_inactive:
         stmt = stmt.where(models.Category.active.is_(True))
     return list(db.scalars(stmt))
+
+
+def delete_category(db: Session, club: models.Club, category_id: int) -> None:
+    stmt = select(models.Category).where(models.Category.id == category_id, models.Category.club_id == club.id)
+    category = db.scalar(stmt)
+    if not category:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category not found")
+
+    db.execute(delete(models.Vote).where(models.Vote.club_id == club.id, models.Vote.category_id == category.id))
+    db.delete(category)
+    db.commit()
 
 
 def set_voting_state(db: Session, club: models.Club, *, open_state: bool) -> models.Club:

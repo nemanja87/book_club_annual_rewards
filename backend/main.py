@@ -85,6 +85,16 @@ def update_book(club_slug: str, book_id: int, book_in: schemas.BookUpdate, db: S
     return schemas.BookRead.model_validate(book)
 
 
+@app.delete(
+    "/api/admin/clubs/{club_slug}/books/{book_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(verify_admin_secret)],
+)
+def delete_book(club_slug: str, book_id: int, db: Session = Depends(get_db)):
+    club = crud.get_club_by_slug(db, club_slug)
+    crud.delete_book(db, club, book_id)
+
+
 @app.get(
     "/api/admin/clubs/{club_slug}/books",
     response_model=list[schemas.BookRead],
@@ -118,6 +128,16 @@ def update_category(
     club = crud.get_club_by_slug(db, club_slug)
     category = crud.update_category(db, club, category_id, category_in)
     return schemas.CategoryRead.model_validate(category)
+
+
+@app.delete(
+    "/api/admin/clubs/{club_slug}/categories/{category_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(verify_admin_secret)],
+)
+def delete_category(club_slug: str, category_id: int, db: Session = Depends(get_db)):
+    club = crud.get_club_by_slug(db, club_slug)
+    crud.delete_category(db, club, category_id)
 
 
 @app.get(
