@@ -27,14 +27,15 @@ def set_sqlite_pragma(dbapi_connection, connection_record):  # pragma: no cover
 def ensure_sqlite_schema():
     """
     Perform lightweight, in-place upgrades for SQLite databases that may have been created
-    with an older schema (e.g., missing votes.book_id / votes.created_at).
+    with an older schema (e.g., missing votes.book_id / votes.created_at / legacy entity columns).
     """
     if not settings.database_url.startswith("sqlite"):
         return
 
     with engine.begin() as conn:
         try:
-            vote_columns = {row[1] for row in conn.exec_driver_sql("PRAGMA table_info(votes);")}
+            vote_info = list(conn.exec_driver_sql("PRAGMA table_info(votes);"))
+            vote_columns = {row[1] for row in vote_info}
         except OperationalError:
             return
 
@@ -48,6 +49,39 @@ def ensure_sqlite_schema():
 
         if "created_at" not in vote_columns:
             conn.exec_driver_sql("ALTER TABLE votes ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP;")
+
+        # Legacy schema had entity_type/entity_id columns with NOT NULL constraint; rebuild if present.
+        if "entity_type" in vote_columns or "entity_id" in vote_columns:
+            conn.exec_driver_sql(
+                """
+                CREATE TABLE IF NOT EXISTS votes_mig (
+                    id INTEGER PRIMARY KEY,
+                    voter_id INTEGER NOT NULL,
+                    club_id INTEGER NOT NULL,
+                    category_id INTEGER NOT NULL,
+                    book_id INTEGER NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                    FOREIGN KEY(voter_id) REFERENCES voters(id) ON DELETE CASCADE,
+                    FOREIGN KEY(club_id) REFERENCES clubs(id) ON DELETE CASCADE,
+                    FOREIGN KEY(category_id) REFERENCES categories(id) ON DELETE CASCADE,
+                    FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE
+                );
+                """
+            )
+            conn.exec_driver_sql(
+                """
+                INSERT INTO votes_mig (id, voter_id, club_id, category_id, book_id, created_at)
+                SELECT id,
+                       voter_id,
+                       club_id,
+                       category_id,
+                       COALESCE(book_id, entity_id) as book_id,
+                       COALESCE(created_at, CURRENT_TIMESTAMP)
+                FROM votes;
+                """
+            )
+            conn.exec_driver_sql("DROP TABLE votes;")
+            conn.exec_driver_sql("ALTER TABLE votes_mig RENAME TO votes;")
 
         index_names = {row[1] for row in conn.exec_driver_sql("PRAGMA index_list(votes);")}
         if "uix_vote_voter_category" not in index_names:

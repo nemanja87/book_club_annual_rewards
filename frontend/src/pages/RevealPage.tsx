@@ -6,7 +6,7 @@ import nominatedTrack from '../sounds/nominated.mp3';
 import winnerTrack from '../sounds/winner.mp3';
 
 type Phase = 'loading' | 'open' | 'ready' | 'error';
-type RevealStage = 'nominees' | 'countdown' | 'winner';
+type RevealStage = 'nominees' | 'countdown' | 'tie' | 'winner';
 
 export default function RevealPage() {
   const { slug } = useParams();
@@ -19,11 +19,17 @@ export default function RevealPage() {
   const [revealStage, setRevealStage] = useState<RevealStage>('nominees');
   const [countdown, setCountdown] = useState(5);
   const [fireworksActive, setFireworksActive] = useState(false);
-  const [showNominees, setShowNominees] = useState(false);
   const [revealedTopCount, setRevealedTopCount] = useState(0);
   const [revealingTop, setRevealingTop] = useState(false);
   const [displayContenders, setDisplayContenders] = useState<BookResult[]>([]);
   const revealIntervalRef = useRef<number | null>(null);
+  const [tieCandidates, setTieCandidates] = useState<BookResult[]>([]);
+  const [tieModalOpen, setTieModalOpen] = useState(false);
+  const [tieSecondsLeft, setTieSecondsLeft] = useState(120);
+  const tieTimerRef = useRef<number | null>(null);
+  const [manualWinnerId, setManualWinnerId] = useState<number | null>(null);
+  const [manualWinners, setManualWinners] = useState<Record<number, number>>({});
+  const [showComplete, setShowComplete] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const nominatedAudioRef = useRef<HTMLAudioElement | null>(null);
   const winnerAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -80,9 +86,13 @@ export default function RevealPage() {
     setRevealStage('nominees');
     setCountdown(5);
     setFireworksActive(false);
-    setShowNominees(false);
     setRevealedTopCount(0);
     setRevealingTop(false);
+    setManualWinnerId(manualWinners[currentCategory?.category_id ?? -1] ?? null);
+    setTieModalOpen(false);
+    setTieCandidates([]);
+    setTieSecondsLeft(120);
+    setShowComplete(false);
     stopAllAudio();
     playNominatedTrack(true);
     clearRevealInterval();
@@ -144,6 +154,10 @@ export default function RevealPage() {
     return () => {
       stopAllAudio();
       clearRevealInterval();
+      if (tieTimerRef.current !== null) {
+        window.clearInterval(tieTimerRef.current);
+        tieTimerRef.current = null;
+      }
     };
   }, []);
 
@@ -154,7 +168,7 @@ export default function RevealPage() {
       setCountdown((prev) => {
         if (prev <= 1) {
           clearInterval(timer);
-          setRevealStage('winner');
+          handleCountdownComplete();
           return 0;
         }
         playTick();
@@ -215,6 +229,63 @@ export default function RevealPage() {
     } catch (err) {
       console.warn('Chime audio failed', err);
     }
+  };
+
+  const getTopTies = (): BookResult[] => {
+    if (!currentCategory || !currentCategory.results.length) return [];
+    const sorted = [...currentCategory.results].sort((a, b) => b.weighted_score - a.weighted_score);
+    const topScore = sorted[0]?.weighted_score ?? 0;
+    const epsilon = 0.000001;
+    return sorted.filter((entry) => Math.abs(entry.weighted_score - topScore) < epsilon);
+  };
+
+  const openTieModal = (candidates: BookResult[]) => {
+    setTieCandidates(candidates);
+    setTieSecondsLeft(120);
+    setTieModalOpen(true);
+    if (tieTimerRef.current !== null) {
+      window.clearInterval(tieTimerRef.current);
+    }
+    tieTimerRef.current = window.setInterval(() => {
+      setTieSecondsLeft((prev) => Math.max(prev - 1, 0));
+    }, 1000);
+  };
+
+  const closeTieModal = () => {
+    if (tieTimerRef.current !== null) {
+      window.clearInterval(tieTimerRef.current);
+      tieTimerRef.current = null;
+    }
+    setTieModalOpen(false);
+  };
+
+  const handleCountdownComplete = () => {
+    const ties = getTopTies();
+    if (ties.length > 1) {
+      setRevealStage('tie');
+      openTieModal(ties);
+      return;
+    }
+    setRevealStage('winner');
+  };
+
+  const selectTieWinner = (bookId: number) => {
+    if (currentCategory) {
+      setManualWinners((prev) => ({ ...prev, [currentCategory.category_id]: bookId }));
+    }
+    setManualWinnerId(bookId);
+    closeTieModal();
+    setRevealStage('winner');
+  };
+
+  const formatTimer = (value: number) => {
+    const mins = Math.floor(value / 60)
+      .toString()
+      .padStart(2, '0');
+    const secs = Math.floor(value % 60)
+      .toString()
+      .padStart(2, '0');
+    return `${mins}:${secs}`;
   };
 
   const stopAllAudio = () => {
@@ -317,9 +388,15 @@ export default function RevealPage() {
     setCurrentIndex((prev) => Math.max(prev - 1, 0));
     stopAllAudio();
     clearRevealInterval();
+    setShowComplete(false);
   };
 
   const goToNext = () => {
+    if (revealStage !== 'winner') return;
+    if (currentIndex >= results.length - 1) {
+        setShowComplete(true);
+        return;
+    }
     setCurrentIndex((prev) => Math.min(prev + 1, results.length - 1));
     stopAllAudio();
     clearRevealInterval();
@@ -340,6 +417,50 @@ export default function RevealPage() {
   };
 
   const renderContent = () => {
+    const currentYear = new Date().getFullYear();
+    const nextYear = currentYear + 1;
+    const totalBooks = allBooksPool.length;
+    const finalWinners = results.map((cat) => {
+      const chosenId =
+        manualWinners[cat.category_id] ??
+        cat.results.find((entry) => entry.is_winner)?.book_id ??
+        cat.results[0]?.book_id;
+      const winnerEntry = cat.results.find((entry) => entry.book_id === chosenId) ?? cat.results[0];
+      return { category: cat.category_name, winner: winnerEntry };
+    });
+
+    if (showComplete) {
+      return (
+        <div className="card finish-card fade-in-up">
+          <p className="finish-eyebrow">We did it!</p>
+          <h2 className="finish-heading">
+            Ladies and gentlemen, a round of applause for your winners.
+          </h2>
+          <div className="winners-table" aria-label="Award winners">
+            {finalWinners.map(({ category, winner }) => (
+              <div key={category} className="winner-row">
+                <div className="winner-col">
+                  <span className="winner-category">{category}</span>
+                </div>
+                <div className="winner-col">
+                  <span className="winner-book">{winner?.title ?? '—'}</span>
+                  {winner?.author && <span className="winner-author"> by {winner.author}</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="finish-bottom">
+            <h2>Thank you for an amazing {currentYear}.</h2>
+            <p>
+              Together we explored <strong>{totalBooks}</strong> books this year. Here&apos;s to an even
+              brighter {nextYear} filled with new stories, laughs, and late-night page turns.
+            </p>
+            <p className="finish-signoff">Happy reading! 📚</p>
+          </div>
+        </div>
+      );
+    }
+
     if (phase === 'loading') {
       return <p className="reveal-message">Preparing the stage...</p>;
     }
@@ -375,12 +496,26 @@ export default function RevealPage() {
       );
     }
 
-    const winner = currentCategory.results.find((entry) => entry.is_winner);
+    const winner =
+      (manualWinnerId !== null
+        ? currentCategory.results.find((entry) => entry.book_id === manualWinnerId)
+        : null) ||
+      (manualWinners[currentCategory.category_id]
+        ? currentCategory.results.find((entry) => entry.book_id === manualWinners[currentCategory.category_id])
+        : null) ||
+      currentCategory.results.find((entry) => entry.is_winner);
     const sortedResults = [...currentCategory.results].sort(
       (a, b) => b.weighted_score - a.weighted_score
     );
     const hideDetails = revealStage !== 'winner';
     const gridClass = `nominee-grid ${displayContenders.length === 3 ? 'three-items' : ''}`;
+    const isWinningEntry = (entry: BookResult) => {
+      const targetId =
+        manualWinnerId ??
+        manualWinners[currentCategory.category_id] ??
+        currentCategory.results.find((e) => e.is_winner)?.book_id;
+      return revealStage === 'winner' && targetId === entry.book_id;
+    };
 
     return (
       <>
@@ -403,7 +538,9 @@ export default function RevealPage() {
               {displayContenders.map((entry, index) => (
                 <div
                   key={entry.book_id}
-                  className={`nominee-chip ${entry.is_winner ? 'nominee-chip-winner' : ''} ${
+                  className={`nominee-chip ${
+                    isWinningEntry(entry) ? 'nominee-chip-winner' : ''
+                  } ${
                     hideDetails && index >= revealedTopCount ? 'nominee-chip-locked' : ''
                   }`}
                 >
@@ -472,48 +609,6 @@ export default function RevealPage() {
               <p className="drum-roll">No winner data.</p>
             ))}
 
-          <div className="nominee-toggle">
-            <button className="button secondary" onClick={() => setShowNominees((prev) => !prev)}>
-              {showNominees ? 'Hide full list' : 'Show full list'}
-            </button>
-          </div>
-          {showNominees && (
-            <table className="nominee-table">
-              <thead>
-                <tr>
-                  <th>Title</th>
-                  <th>Readers</th>
-                  <th>Votes</th>
-                  <th>Weighted</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sortedResults.map((entry) => (
-                  <tr key={entry.book_id} className={entry.is_winner ? 'winner-row' : ''}>
-                    <td>
-                      {entry.title}
-                      {entry.author && <span className="muted"> by {entry.author}</span>}
-                    </td>
-                    <td>{entry.readers_count}</td>
-                    <td>{entry.votes_count}</td>
-                    <td>{entry.weighted_score.toFixed(3)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-        <div className="reveal-nav">
-          <button className="button secondary" onClick={goToPrevious} disabled={currentIndex === 0}>
-            Previous
-          </button>
-          <button
-            className="button"
-            onClick={goToNext}
-            disabled={currentIndex >= results.length - 1}
-          >
-            Next
-          </button>
         </div>
       </>
     );
@@ -521,6 +616,33 @@ export default function RevealPage() {
 
   return (
     <div className="reveal-page">
+      {tieModalOpen && (
+        <div className="tie-overlay" role="dialog" aria-modal="true">
+          <div className="tie-card">
+            <p className="tie-label">It&apos;s a tie!</p>
+            <h3 className="tie-title">Please discuss and pick the winner aloud.</h3>
+            <p className="tie-subtext">
+              Choose the final winner below once your group agrees.
+            </p>
+            <div className="tie-timer">⏱ {formatTimer(tieSecondsLeft)}</div>
+            <div className="tie-options">
+              {tieCandidates.map((candidate) => (
+                <button
+                  key={candidate.book_id}
+                  className="tie-option"
+                  onClick={() => selectTieWinner(candidate.book_id)}
+                >
+                  <strong>{candidate.title}</strong>
+                  {candidate.author && <span className="muted"> by {candidate.author}</span>}
+                  <span className="muted">
+                    Score {candidate.weighted_score.toFixed(3)} · Votes {candidate.votes_count}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
       {fireworksActive && (
         <div className="fireworks">
           {Array.from({ length: 7 }).map((_, idx) => (
@@ -536,6 +658,20 @@ export default function RevealPage() {
         </button>
       </div>
       {renderContent()}
+      {!showComplete && (
+        <div className="reveal-nav">
+          <button className="button secondary" onClick={goToPrevious} disabled={currentIndex === 0}>
+            Previous
+          </button>
+          <button
+            className="button"
+            onClick={goToNext}
+            disabled={revealStage !== 'winner'}
+          >
+            {currentIndex >= results.length - 1 ? 'Finish' : 'Next'}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

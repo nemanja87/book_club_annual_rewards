@@ -68,6 +68,186 @@ h1,
   cursor: not-allowed;
 }
 
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.75);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  z-index: 1000;
+  backdrop-filter: blur(2px);
+}
+
+.spinner {
+  width: 56px;
+  height: 56px;
+  border-radius: 999px;
+  border: 6px solid #e5e7eb;
+  border-top-color: #4f46e5;
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.tie-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(17, 24, 39, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1100;
+  padding: 1.5rem;
+}
+
+.tie-card {
+  max-width: 820px;
+  width: 100%;
+  background: linear-gradient(135deg, #111827, #0f172a);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  padding: 2rem;
+  color: #e5e7eb;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+}
+
+.tie-label {
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  color: #fcd34d;
+  font-size: 1rem;
+}
+
+.tie-title {
+  margin: 0.5rem 0 0.35rem;
+  font-size: 1.75rem;
+}
+
+.tie-subtext {
+  margin: 0 0 1rem;
+  color: #cbd5e1;
+  font-size: 1.05rem;
+}
+
+.tie-timer {
+  font-weight: 700;
+  color: #fbbf24;
+  margin-bottom: 1.25rem;
+  font-size: 1.15rem;
+}
+
+.tie-options {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.tie-option {
+  width: 100%;
+  text-align: left;
+  background: #1f2937;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  padding: 1.1rem;
+  color: #e5e7eb;
+  cursor: pointer;
+  transition: transform 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+  font-size: 1.05rem;
+}
+
+.tie-option:hover {
+  transform: translateY(-2px);
+  border-color: #fbbf24;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
+}
+
+.winners-table {
+  margin: 1.5rem auto 1.25rem;
+  max-width: 1024px;
+  width: 100%;
+  text-align: left;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 0.5rem 0.75rem;
+}
+
+.winner-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.35rem;
+  padding: 0.75rem 1rem;
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+}
+
+.winner-category {
+  font-weight: 700;
+  color: #fbbf24;
+  font-size: 1rem;
+}
+
+.winner-book {
+  font-weight: 700;
+  color: #e5e7eb;
+  font-size: 1.05rem;
+}
+
+.winner-author {
+  color: #cbd5e1;
+}
+
+.finish-card {
+  text-align: center;
+  padding: 2.5rem 2rem;
+  background: radial-gradient(circle at 30% 30%, rgba(79, 70, 229, 0.08), transparent 45%),
+    radial-gradient(circle at 70% 70%, rgba(248, 113, 113, 0.08), transparent 45%),
+    #0b1120;
+  color: #e5e7eb;
+}
+
+.finish-eyebrow {
+  margin: 0;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #fbbf24;
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+.finish-heading {
+  margin: 0.5rem 0 1rem;
+  font-size: 1.8rem;
+}
+
+.finish-bottom h2 {
+  margin: 1.5rem 0 0.5rem;
+  font-size: 2.4rem;
+  color: #fef3c7;
+}
+
+.finish-bottom p {
+  margin: 0.25rem 0;
+  font-size: 1.25rem;
+  color: #e5e7eb;
+}
+
+.finish-signoff {
+  margin-top: 0.6rem;
+  font-weight: 700;
+  font-size: 1.35rem;
+  color: #fbbf24;
+}
+
 input,
  textarea {
   width: 100%;

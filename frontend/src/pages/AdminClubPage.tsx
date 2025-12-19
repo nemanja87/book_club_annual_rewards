@@ -295,6 +295,12 @@ export default function AdminClubPage() {
 
   return (
     <div className="container">
+      {isImporting && (
+        <div className="loading-overlay" role="status" aria-live="polite">
+          <div className="spinner" aria-hidden />
+          <p>Importing items...</p>
+        </div>
+      )}
       <h1>{config.club.name}</h1>
       <p className="muted">Slug: {config.club.slug}</p>
       <div className="actions">
