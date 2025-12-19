@@ -30,6 +30,7 @@ export default function RevealPage() {
   const [manualWinnerId, setManualWinnerId] = useState<number | null>(null);
   const [manualWinners, setManualWinners] = useState<Record<number, number>>({});
   const [showComplete, setShowComplete] = useState(false);
+  const [bookOptionsCount, setBookOptionsCount] = useState(0);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const nominatedAudioRef = useRef<HTMLAudioElement | null>(null);
   const winnerAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -55,6 +56,7 @@ export default function RevealPage() {
     try {
       const { data } = await api.get<ClubConfigResponse>(`/api/clubs/${slug}/config`);
       setClub(data.club);
+      setBookOptionsCount(data.books.length);
       if (data.club.voting_open) {
         setPhase('open');
         setResults([]);
@@ -419,7 +421,7 @@ export default function RevealPage() {
   const renderContent = () => {
     const currentYear = new Date().getFullYear();
     const nextYear = currentYear + 1;
-    const totalBooks = allBooksPool.length;
+    const totalBooks = bookOptionsCount || allBooksPool.length;
     const finalWinners = results.map((cat) => {
       const chosenId =
         manualWinners[cat.category_id] ??
