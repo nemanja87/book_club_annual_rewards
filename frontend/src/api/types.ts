@@ -28,6 +28,8 @@ export interface ClubConfigResponse {
   club: Club;
   books: Book[];
   categories: Category[];
+  best_member_nominees?: string[];
+  best_member_nominees_detail?: BestMemberNominee[];
 }
 
 export interface VoteEntry {
@@ -89,4 +91,21 @@ export interface RevealResultsResponse {
 export interface RevealVotingOpenResponse {
   status: 'voting_open';
   message: string;
+}
+
+export interface BestMemberResult {
+  nominee_name: string;
+  votes_count: number;
+  is_winner: boolean;
+}
+
+export interface BestMemberResultsResponse {
+  club: Club;
+  nominees: BestMemberResult[];
+}
+
+export interface BestMemberNominee {
+  id: number;
+  club_id: number;
+  name: string;
 }

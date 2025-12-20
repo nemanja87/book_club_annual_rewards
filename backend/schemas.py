@@ -108,6 +108,8 @@ class ClubConfigResponse(BaseModel):
     club: ClubRead
     books: List[BookRead]
     categories: List[CategoryRead]
+    best_member_nominees: List[str] = []
+    best_member_nominees_detail: List["BestMemberNominee"] = []
 
 
 class VoteSubmissionResponse(BaseModel):
@@ -140,3 +142,36 @@ class RevealResultsResponse(BaseModel):
     status: Literal["ok"]
     club: ClubRead
     results: List[CategoryResult]
+
+
+class BestMemberVoteSubmission(BaseModel):
+    voter_name: str
+    nominee_name: str
+
+
+class BestMemberResult(BaseModel):
+    nominee_name: str
+    votes_count: int
+    is_winner: bool
+
+
+class BestMemberResultsResponse(BaseModel):
+    club: ClubRead
+    nominees: List[BestMemberResult]
+
+
+class BestMemberNominee(BaseModel):
+    id: int
+    club_id: int
+    name: str
+
+    class Config:
+        from_attributes = True
+
+
+class BestMemberNomineeCreate(BaseModel):
+    name: str
+
+
+# Resolve forward references
+ClubConfigResponse.model_rebuild()

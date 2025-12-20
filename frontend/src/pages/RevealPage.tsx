@@ -1,7 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../api/client';
-import { BookResult, CategoryResult, Club, ClubConfigResponse, RevealResultsResponse } from '../api/types';
+import {
+  BestMemberResult,
+  BookResult,
+  CategoryResult,
+  Club,
+  ClubConfigResponse,
+  RevealResultsResponse
+} from '../api/types';
 import nominatedTrack from '../sounds/nominated.mp3';
 import winnerTrack from '../sounds/winner.mp3';
 
@@ -32,6 +39,10 @@ export default function RevealPage() {
   const [showComplete, setShowComplete] = useState(false);
   const [bookOptionsCount, setBookOptionsCount] = useState(0);
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [bestMemberResults, setBestMemberResults] = useState<BestMemberResult[]>([]);
+  const [bestMemberStage, setBestMemberStage] = useState<'idle' | 'loading' | 'countdown' | 'winner'>('idle');
+  const [bestMemberCountdown, setBestMemberCountdown] = useState(3);
+  const [bestMemberError, setBestMemberError] = useState<string | null>(null);
   const nominatedAudioRef = useRef<HTMLAudioElement | null>(null);
   const winnerAudioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -230,6 +241,39 @@ export default function RevealPage() {
       osc.stop(now + 0.55);
     } catch (err) {
       console.warn('Chime audio failed', err);
+    }
+  };
+
+  const startBestMemberReveal = async () => {
+    if (!slug) return;
+    setBestMemberError(null);
+    setBestMemberStage('loading');
+    try {
+      const { data } = await api.get(`/api/clubs/${slug}/best-member/results`);
+      const sorted = [...data.nominees].sort((a, b) => b.votes_count - a.votes_count);
+      setBestMemberResults(sorted);
+      if (!sorted.length) {
+        setBestMemberError('No best member votes yet.');
+        setBestMemberStage('idle');
+        return;
+      }
+      setBestMemberStage('countdown');
+      setBestMemberCountdown(3);
+      const timer = setInterval(() => {
+        setBestMemberCountdown((prev) => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            setBestMemberStage('winner');
+            playWinnerTrack(true);
+            return 0;
+          }
+          playTick();
+          return prev - 1;
+        });
+      }, 1000);
+    } catch (err: any) {
+      setBestMemberError(err?.response?.data?.detail ?? 'Unable to load best member results');
+      setBestMemberStage('idle');
     }
   };
 
@@ -458,6 +502,44 @@ export default function RevealPage() {
               brighter {nextYear} filled with new stories, laughs, and late-night page turns.
             </p>
             <p className="finish-signoff">Happy reading! 📚</p>
+          </div>
+          <div className="best-member-block">
+            <div className="best-member-header">
+              <div>
+                <p className="finish-eyebrow" style={{ marginBottom: 0 }}>Best Club Member 2025</p>
+                <p className="muted">A secret ballot for the MVP of the year.</p>
+              </div>
+              <button
+                className="button"
+                onClick={startBestMemberReveal}
+                disabled={bestMemberStage === 'loading' || bestMemberStage === 'countdown'}
+              >
+                {bestMemberStage === 'winner' ? 'Reveal again' : 'Reveal best member'}
+              </button>
+            </div>
+            {bestMemberError && <p className="muted">{bestMemberError}</p>}
+            {bestMemberStage === 'countdown' && (
+              <div className="countdown-card" style={{ marginTop: '0.75rem' }}>
+                <p className="drum-roll">Cue the applause...</p>
+                <div className="countdown-ring">{bestMemberCountdown === 0 ? 'Go!' : bestMemberCountdown}</div>
+              </div>
+            )}
+            {bestMemberStage === 'winner' && bestMemberResults.length > 0 && (
+              <div className="winner-card pop-in" style={{ marginTop: '0.75rem' }}>
+                <p className="winner-label">Best Club Member</p>
+                <h3 className="winner-title">{bestMemberResults[0].nominee_name}</h3>
+                <div className="winner-meta">
+                  <span>{bestMemberResults[0].votes_count} votes</span>
+                </div>
+                {bestMemberResults.slice(1, 3).length > 0 && (
+                  <div className="best-member-runnerups">
+                    {bestMemberResults.slice(1, 3).map((r) => (
+                      <span key={r.nominee_name}>{r.nominee_name}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       );

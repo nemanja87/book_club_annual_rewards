@@ -263,3 +263,96 @@ def get_results(db: Session, club: models.Club) -> schemas.ResultsResponse:
         )
 
     return schemas.ResultsResponse(club=schemas.ClubRead.model_validate(club), categories=category_results)
+
+
+def submit_best_member_vote(db: Session, club: models.Club, payload: schemas.BestMemberVoteSubmission) -> models.BestMemberVote:
+    voter = _get_or_create_voter(db, club, payload.voter_name)
+    nominee = payload.nominee_name.strip()
+    if not nominee:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nominee name is required")
+
+    # Validate nominee exists if admin configured nominees; allow free text only when none exist.
+    stmt_nominees = select(models.BestMemberNominee.name).where(models.BestMemberNominee.club_id == club.id)
+    allowed = {row for (row,) in db.execute(stmt_nominees)}
+    if allowed and nominee not in allowed:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid nominee")
+
+    stmt = select(models.BestMemberVote).where(
+        models.BestMemberVote.club_id == club.id, models.BestMemberVote.voter_id == voter.id
+    )
+    existing = db.scalar(stmt)
+    if existing:
+        existing.nominee_name = nominee
+        db.add(existing)
+        db.commit()
+        db.refresh(existing)
+        return existing
+
+    vote = models.BestMemberVote(club_id=club.id, voter_id=voter.id, nominee_name=nominee)
+    db.add(vote)
+    db.commit()
+    db.refresh(vote)
+    return vote
+
+
+def get_best_member_results(db: Session, club: models.Club) -> schemas.BestMemberResultsResponse:
+    stmt = (
+        select(models.BestMemberVote.nominee_name, func.count(models.BestMemberVote.id).label("votes"))
+        .where(models.BestMemberVote.club_id == club.id)
+        .group_by(models.BestMemberVote.nominee_name)
+    )
+    rows = db.execute(stmt).all()
+    if not rows:
+        return schemas.BestMemberResultsResponse(
+            club=schemas.ClubRead.model_validate(club),
+            nominees=[],
+        )
+
+    results: list[schemas.BestMemberResult] = []
+    best_votes = max(v for _, v in rows)
+    for nominee_name, votes_count in rows:
+        results.append(
+            schemas.BestMemberResult(
+                nominee_name=nominee_name,
+                votes_count=votes_count,
+                is_winner=votes_count == best_votes,
+            )
+        )
+    results.sort(key=lambda r: r.votes_count, reverse=True)
+    return schemas.BestMemberResultsResponse(
+        club=schemas.ClubRead.model_validate(club),
+        nominees=results,
+    )
+
+
+def create_best_member_nominee(db: Session, club: models.Club, name: str) -> models.BestMemberNominee:
+    name = name.strip()
+    if not name:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Name is required")
+    nominee = models.BestMemberNominee(club_id=club.id, name=name)
+    db.add(nominee)
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nominee already exists") from exc
+    db.refresh(nominee)
+    return nominee
+
+
+def list_best_member_nominees(db: Session, club: models.Club) -> list[models.BestMemberNominee]:
+    stmt = select(models.BestMemberNominee).where(models.BestMemberNominee.club_id == club.id).order_by(
+        models.BestMemberNominee.name
+    )
+    return list(db.scalars(stmt))
+
+
+def delete_best_member_nominee(db: Session, club: models.Club, nominee_id: int) -> None:
+    stmt = select(models.BestMemberNominee).where(
+        models.BestMemberNominee.id == nominee_id, models.BestMemberNominee.club_id == club.id
+    )
+    nominee = db.scalar(stmt)
+    if not nominee:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Nominee not found")
+    db.delete(nominee)
+    db.commit()

@@ -19,6 +19,11 @@ export default function VotingPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [submittedName, setSubmittedName] = useState<string | null>(null);
   const [voteCompleted, setVoteCompleted] = useState(false);
+  const [memberNominee, setMemberNominee] = useState('');
+  const [memberSubmitting, setMemberSubmitting] = useState(false);
+  const [memberSubmitted, setMemberSubmitted] = useState(false);
+  const [memberMessage, setMemberMessage] = useState<string | null>(null);
+  const [bestMemberNominees, setBestMemberNominees] = useState<string[]>([]);
 
   useEffect(() => {
     if (!slug) {
@@ -31,12 +36,16 @@ export default function VotingPage() {
         setConfig(response.data);
         setBooks(response.data.books);
         setCategories(response.data.categories);
+        setBestMemberNominees(response.data.best_member_nominees ?? []);
         setSelected({});
         setCurrentIndex(0);
         setError(null);
         setMessage(null);
         setSubmittedName(null);
         setVoteCompleted(false);
+        setMemberNominee('');
+        setMemberSubmitted(false);
+        setMemberMessage(null);
       })
       .catch(() => {
         setError('Club not found');
@@ -90,6 +99,33 @@ export default function VotingPage() {
     }
   };
 
+  const submitBestMember = async () => {
+    const nameToUse = (submittedName || voterName).trim();
+    if (!nameToUse) {
+      setMemberMessage('Please enter your name above first.');
+      return;
+    }
+    if (!memberNominee.trim()) {
+      setMemberMessage('Please pick a nominee.');
+      return;
+    }
+    if (!slug) return;
+    setMemberSubmitting(true);
+    setMemberMessage(null);
+    try {
+      await api.post(`/api/clubs/${slug}/best-member/vote`, {
+        voter_name: nameToUse,
+        nominee_name: memberNominee.trim()
+      });
+      setMemberSubmitted(true);
+      setMemberMessage('Thanks! Your best member vote is in.');
+    } catch (err: any) {
+      setMemberMessage(err?.response?.data?.detail ?? 'Unable to submit best member vote');
+    } finally {
+      setMemberSubmitting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="container">
@@ -138,6 +174,42 @@ export default function VotingPage() {
               Edit votes
             </button>
           </div>
+        </div>
+
+        <div className="card">
+          <h3>Best club member 2025</h3>
+          <p className="muted">
+            One more thing: cast a secret vote for the club member who made this year special.
+          </p>
+          {bestMemberNominees.length === 0 ? (
+            <p className="muted">No nominees yet.</p>
+          ) : (
+            <div className="stack">
+              {bestMemberNominees.map((nominee) => (
+                <label key={nominee} className="book-option">
+                  <input
+                    type="radio"
+                    name="best-member"
+                    value={nominee}
+                    checked={memberNominee === nominee}
+                    onChange={() => setMemberNominee(nominee)}
+                    disabled={memberSubmitting || memberSubmitted}
+                  />
+                  <span>{nominee}</span>
+                </label>
+              ))}
+            </div>
+          )}
+          <div className="actions">
+            <button
+              className="button"
+              onClick={submitBestMember}
+              disabled={memberSubmitting || memberSubmitted || bestMemberNominees.length === 0}
+            >
+              {memberSubmitted ? 'Vote recorded' : memberSubmitting ? 'Submitting...' : 'Submit best member vote'}
+            </button>
+          </div>
+          {memberMessage && <p className="muted">{memberMessage}</p>}
         </div>
       </div>
     );

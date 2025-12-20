@@ -5,7 +5,8 @@ import {
   Book,
   Category,
   ClubConfigResponse,
-  ResultsResponse
+  ResultsResponse,
+  BestMemberNominee
 } from '../api/types';
 
 export default function AdminClubPage() {
@@ -27,6 +28,8 @@ export default function AdminClubPage() {
     description: '',
     sort_order: 0
   });
+  const [bestMemberNominees, setBestMemberNominees] = useState<BestMemberNominee[]>([]);
+  const [newNominee, setNewNominee] = useState('');
 
   const load = () => {
     if (!slug) return;
@@ -36,6 +39,7 @@ export default function AdminClubPage() {
         setConfig(response.data);
         setBooks(response.data.books);
         setCategories(response.data.categories);
+        setBestMemberNominees(response.data.best_member_nominees_detail ?? []);
         setError(null);
       })
       .catch((err) => setError(err.response?.data?.detail ?? 'Unable to load club'));
@@ -280,6 +284,32 @@ export default function AdminClubPage() {
   const cancelEdits = () => {
     setEditingBookId(null);
     setEditingCategoryId(null);
+  };
+
+  const addBestMemberNominee = async () => {
+    if (!slug || !newNominee.trim()) return;
+    try {
+      const { data } = await api.post<BestMemberNominee>(
+        `/api/admin/clubs/${slug}/best-member/nominees`,
+        { name: newNominee.trim() }
+      );
+      setBestMemberNominees((prev) => [...prev, data]);
+      setNewNominee('');
+    } catch (err: any) {
+      setError(err.response?.data?.detail ?? 'Unable to add nominee');
+    }
+  };
+
+  const deleteBestMemberNominee = async (nominee: BestMemberNominee) => {
+    if (!slug) return;
+    const ok = window.confirm(`Remove "${nominee.name}" from best member nominees?`);
+    if (!ok) return;
+    try {
+      await api.delete(`/api/admin/clubs/${slug}/best-member/nominees/${nominee.id}`);
+      setBestMemberNominees((prev) => prev.filter((n) => n.id !== nominee.id));
+    } catch (err: any) {
+      setError(err.response?.data?.detail ?? 'Unable to delete nominee');
+    }
   };
 
   if (!config) {
@@ -550,6 +580,29 @@ export default function AdminClubPage() {
               </span>
             </label>
           </form>
+        </div>
+      </div>
+
+      <div className="card">
+        <h2>Best club member nominees (2025)</h2>
+        <p className="muted">Create the list voters can choose from for the best member ballot.</p>
+        {bestMemberNominees.length === 0 && <p className="muted">No nominees yet.</p>}
+        {bestMemberNominees.map((nominee) => (
+          <div key={nominee.id} className="list-item">
+            <div>{nominee.name}</div>
+            <button className="button danger" type="button" onClick={() => deleteBestMemberNominee(nominee)}>
+              Delete
+            </button>
+          </div>
+        ))}
+        <div className="stack" style={{ marginTop: '1rem' }}>
+          <label>
+            Add nominee
+            <input value={newNominee} onChange={(e) => setNewNominee(e.target.value)} />
+          </label>
+          <button className="button" type="button" onClick={addBestMemberNominee}>
+            Add nominee
+          </button>
         </div>
       </div>
 

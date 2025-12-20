@@ -56,10 +56,13 @@ def get_club_detail(club_slug: str, db: Session = Depends(get_db)):
     club = crud.get_club_by_slug(db, club_slug)
     books = crud.list_books(db, club)
     categories = crud.list_categories(db, club)
+    nominees = crud.list_best_member_nominees(db, club)
     return schemas.ClubConfigResponse(
         club=schemas.ClubRead.model_validate(club),
         books=[schemas.BookRead.model_validate(book) for book in books],
         categories=[schemas.CategoryRead.model_validate(cat) for cat in categories],
+        best_member_nominees=[nom.name for nom in nominees],
+        best_member_nominees_detail=[schemas.BestMemberNominee.model_validate(n) for n in nominees],
     )
 
 
@@ -141,6 +144,38 @@ def delete_category(club_slug: str, category_id: int, db: Session = Depends(get_
 
 
 @app.get(
+    "/api/admin/clubs/{club_slug}/best-member/nominees",
+    response_model=list[schemas.BestMemberNominee],
+    dependencies=[Depends(verify_admin_secret)],
+)
+def list_best_member_nominees(club_slug: str, db: Session = Depends(get_db)):
+    club = crud.get_club_by_slug(db, club_slug)
+    nominees = crud.list_best_member_nominees(db, club)
+    return [schemas.BestMemberNominee.model_validate(n) for n in nominees]
+
+
+@app.post(
+    "/api/admin/clubs/{club_slug}/best-member/nominees",
+    response_model=schemas.BestMemberNominee,
+    dependencies=[Depends(verify_admin_secret)],
+)
+def create_best_member_nominee(club_slug: str, payload: schemas.BestMemberNomineeCreate, db: Session = Depends(get_db)):
+    club = crud.get_club_by_slug(db, club_slug)
+    nominee = crud.create_best_member_nominee(db, club, payload.name)
+    return schemas.BestMemberNominee.model_validate(nominee)
+
+
+@app.delete(
+    "/api/admin/clubs/{club_slug}/best-member/nominees/{nominee_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(verify_admin_secret)],
+)
+def delete_best_member_nominee(club_slug: str, nominee_id: int, db: Session = Depends(get_db)):
+    club = crud.get_club_by_slug(db, club_slug)
+    crud.delete_best_member_nominee(db, club, nominee_id)
+
+
+@app.get(
     "/api/admin/clubs/{club_slug}/categories",
     response_model=list[schemas.CategoryRead],
     dependencies=[Depends(verify_admin_secret)],
@@ -189,10 +224,13 @@ def public_config(club_slug: str, db: Session = Depends(get_db)):
     club = crud.get_club_by_slug(db, club_slug)
     books = crud.list_books(db, club)
     categories = crud.list_categories(db, club, include_inactive=False)
+    nominees = crud.list_best_member_nominees(db, club)
     return schemas.ClubConfigResponse(
         club=schemas.ClubRead.model_validate(club),
         books=[schemas.BookRead.model_validate(book) for book in books],
         categories=[schemas.CategoryRead.model_validate(cat) for cat in categories],
+        best_member_nominees=[nom.name for nom in nominees],
+        best_member_nominees_detail=[],
     )
 
 
@@ -229,3 +267,17 @@ def reveal_results(club_slug: str, db: Session = Depends(get_db)):
         results=results.categories,
     )
     return payload
+
+
+# Best member voting (separate from book/category awards)
+@app.post("/api/clubs/{club_slug}/best-member/vote", response_model=schemas.BestMemberResult)
+def submit_best_member_vote(club_slug: str, payload: schemas.BestMemberVoteSubmission, db: Session = Depends(get_db)):
+    club = crud.get_club_by_slug(db, club_slug)
+    vote = crud.submit_best_member_vote(db, club, payload)
+    return schemas.BestMemberResult(nominee_name=vote.nominee_name, votes_count=1, is_winner=False)
+
+
+@app.get("/api/clubs/{club_slug}/best-member/results", response_model=schemas.BestMemberResultsResponse)
+def best_member_results(club_slug: str, db: Session = Depends(get_db)):
+    club = crud.get_club_by_slug(db, club_slug)
+    return crud.get_best_member_results(db, club)

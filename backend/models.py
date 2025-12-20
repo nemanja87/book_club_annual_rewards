@@ -83,3 +83,30 @@ class Vote(Base):
     __table_args__ = (
         UniqueConstraint("voter_id", "category_id", name="uix_vote_voter_category"),
     )
+
+
+class BestMemberVote(Base):
+    __tablename__ = "best_member_votes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    voter_id = Column(Integer, ForeignKey("voters.id", ondelete="CASCADE"), nullable=False, index=True)
+    club_id = Column(Integer, ForeignKey("clubs.id", ondelete="CASCADE"), nullable=False, index=True)
+    nominee_name = Column(String(255), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    voter = relationship("Voter")
+    club = relationship("Club")
+
+    __table_args__ = (UniqueConstraint("club_id", "voter_id", name="uix_best_member_vote_club_voter"),)
+
+
+class BestMemberNominee(Base):
+    __tablename__ = "best_member_nominees"
+
+    id = Column(Integer, primary_key=True, index=True)
+    club_id = Column(Integer, ForeignKey("clubs.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+
+    club = relationship("Club")
+
+    __table_args__ = (UniqueConstraint("club_id", "name", name="uix_best_member_nominee_club_name"),)
